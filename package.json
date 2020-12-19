@@ -4,17 +4,15 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "npx mocha"
   },
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "chai": "^4.2.0",
-    "mocha": "^8.2.1",
-    "sinon": "^9.2.2",
-    "sinon-chai": "^3.5.0"
+    "chai": "4.2.0",
+    "mocha": "8.2.1"
   },
   "dependencies": {
-    "ramda": "^0.27.1"
+    "ramda": "0.27.1"
   }
 }
