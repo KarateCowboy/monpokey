@@ -32,7 +32,6 @@ while (gameController.gameState.gameOver === false && cmds.length > 0) {
     } else {
       process.stdout.write(textOutput)
     }
-    // console.log(textOutput)
   } catch (err) {
     console.log(err.message)
     process.exit(1)
