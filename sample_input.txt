@@ -1,0 +1,10 @@
+CREATE Rocket Meekachu 3 1
+CREATE Rocket Rastly 5 6
+CREATE Green Smorelax 2 1
+ICHOOSEYOU Meekachu
+ICHOOSEYOU Smorelax
+ATTACK
+ATTACK
+ICHOOSEYOU Rastly
+ATTACK
+ATTACK
