@@ -74,39 +74,33 @@ class GameController {
   }
 
   execCmd (cmdRecord) {
-    const d = cmdRecord.data
-    let output
-    switch (cmdRecord.type) {
-      case 'CREATE':
-        this.createCmd(d[0], d[1], d[2], d[3])
-        output = `${d[1]} has been assigned to team ${d[0]}!`
-        break
-      case 'CHOOSE':
-        this.chooseCmd(d[0])
-        output = `${d[0]} has entered the battle!`
-        break
-      case 'ATTACK':
-        const result = this.attackCmd()
-        output = `${result.attacker} attacked ${result.defender} for ${result.attack} damage!`
-        if (result.defeated) output += `\n${result.defender} has been defeated!`
-        if (this.gameState.currentTeam.isDefeated) output += `\n${this.gameState.otherTeam.name} is the winner!`
-        break
+    const self = this
+    const dispatch = {
+      'CREATE': function (data) { return self.createCmd(data)},
+      'CHOOSE': function (data) { return self.chooseCmd(data) },
+      'ATTACK': function (data) {return self.attackCmd(data)}
     }
+    let output =  dispatch[cmdRecord.type](cmdRecord.data)
+    if (this.gameState.currentTeam.isDefeated) output += `\n${this.gameState.otherTeam.name} is the winner!`
     return output
   }
 
-  createCmd (teamName, monName, hp, attack) {
+  createCmd (data) {
+    const [teamName, monName, hp, attack] = data
     this.gameState.addTeam(teamName)
     this.gameState.teams[teamName].addMon(monName, hp, attack)
+    return `${monName} has been assigned to team ${teamName}!`
   }
 
-  chooseCmd (monName) {
+  chooseCmd (data) {
+    const monName = data[0]
     if (this.gameState.teamCount < 2) throw new Error('You may not choose a Mon until another team arrives')
     const neededMon = this.gameState.allMon().find(m => m.name === monName)
     if (neededMon.teamName !== this.gameState.currentTeam.name) throw new Error('You may not choose the other team\'s Monpoke')
     if (neededMon.hp <= 0) throw new Error('You may not choose a defeated Mon')
     this.gameState.teams[neededMon.teamName].inRing = monName
     this.gameState.switchCurrentTeam()
+    return `${monName} has entered the battle!`
   }
 
   attackCmd () {
@@ -120,11 +114,9 @@ class GameController {
       this.gameState.gameOver = true
     }
 
-    const defeated = defendingMon.hp < 1
-    return {
-      attacker: attackingMon.name, defender: defendingMon.name, attack: attackingMon.attack, defeated: defeated
-    }
-
+    let output = `${attackingMon.name} attacked ${defendingMon.name} for ${attackingMon.attack} damage!`
+    if(defendingMon.hp < 1) output += `\n${defendingMon.name} has been defeated!`
+    return output
   }
 
   parse (cmdString) {

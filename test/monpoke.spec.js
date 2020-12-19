@@ -204,6 +204,11 @@ describe('Game Controller', () => {
       const teamRocket = gameController.gameState.teams['Rocket']
       expect(teamRocket.monpokes).to.have.property('length', 1)
     })
+    it('returns the game output', () => {
+      const gameController = new GameController()
+      output = gameController.execCmd(createRocketMeekachu)
+      expect(output).to.equal('Meekachu has been assigned to team Rocket!')
+    })
   })
   describe('CHOOSE command', () => {
     context('try to pick a valid monpoke', () => {
@@ -211,25 +216,35 @@ describe('Game Controller', () => {
         type: 'CHOOSE',
         data: ['Meekachu']
       }
-      const gameController = new GameController()
-      gameController.execCmd(createRocketMeekachu)
       const createSprocketRecord = {
         type: 'CREATE',
         data: ['Spocket', 'Beekachu', 3, 1]
       }
-      gameController.execCmd(createSprocketRecord)
-      expect(gameController.gameState.combatStarted).to.equal(false)
-      gameController.execCmd(chooseRecord)
-      expect(gameController.gameState.teams['Rocket'].inRing).to.equal('Meekachu')
+      it('returns the game output', () => {
+        const gameController = new GameController()
+        gameController.execCmd(createRocketMeekachu)
+        gameController.execCmd((createSprocketRecord))
+        const output = gameController.execCmd(chooseRecord)
+        expect(output).to.equal('Meekachu has entered the battle!')
+      })
 
-      expect(gameController.gameState.combatStarted).to.equal(true)
+      it('chooses the mon', () => {
+        const gameController = new GameController()
+        gameController.execCmd(createRocketMeekachu)
+        gameController.execCmd(createSprocketRecord)
+        expect(gameController.gameState.combatStarted).to.equal(false)
+        gameController.execCmd(chooseRecord)
+        expect(gameController.gameState.teams['Rocket'].inRing).to.equal('Meekachu')
 
-      const chooseBeekachuRecord = {
-        type: 'CHOOSE',
-        data: ['Beekachu']
-      }
-      gameController.execCmd(chooseBeekachuRecord)
-      expect(gameController.gameState.combatStarted).to.equal(true)
+        expect(gameController.gameState.combatStarted).to.equal(true)
+
+        const chooseBeekachuRecord = {
+          type: 'CHOOSE',
+          data: ['Beekachu']
+        }
+        gameController.execCmd(chooseBeekachuRecord)
+        expect(gameController.gameState.combatStarted).to.equal(true)
+      })
     })
     context('invalid choose', () => {
       specify('when mon belongs to other team', () => {
@@ -287,6 +302,25 @@ describe('Game Controller', () => {
       const socketMon = allMon.find(m => m.name === 'Flonyx')
       expect(meekachu.hp).to.equal(1)
       expect(socketMon.hp).to.equal(createSocketFlonyx.data[2] - meekachu.attack)
+    })
+    it('returns the game output', () => {
+      const gameController = new GameController()
+      gameController.execCmd(createRocketMeekachu)
+      gameController.execCmd(createSocketFlonyx)
+      gameController.execCmd({
+        type: 'CHOOSE',
+        data: [createRocketMeekachu.data[1]]
+      })
+      gameController.execCmd({
+        type: 'CHOOSE',
+        data: [createSocketFlonyx.data[1]]
+      })
+      const output = gameController.execCmd({ type: 'ATTACK' })
+      expect(output).to.equal('Meekachu attacked Flonyx for 1 damage!')
+      gameController.execCmd({ type: 'ATTACK' })
+      gameController.execCmd({ type: 'ATTACK' })
+      const newOutput = gameController.execCmd({ type: 'ATTACK' })
+      expect(newOutput).to.include('Meekachu has been defeated!')
     })
     context('invalid attack cmd', () => {
       specify('when current mon is defeated', () => {
