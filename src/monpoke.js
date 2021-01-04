@@ -1,5 +1,7 @@
 const R = require('ramda')
 
+const Update = Object.assign
+
 class Monpoke {
   constructor (name, hp, attack, teamName = '') {
     [this.name, this.hp, this.attack, this.teamName] = arguments
@@ -16,16 +18,17 @@ class Team {
     this.id = id
   }
 
-  get isDefeated () {
-    return !this.monpokes.some(m => m.hp > 0)
+  static currentMon (teamIn) {
+    return teamIn.monpokes.find(m => m.name === teamIn.inRing)
   }
 
-  addMon (name, hp, attack) {
-    this.monpokes.push(new Monpoke(name, hp, attack, this.name))
+  static addMon(name, hp, attack, teamIn) {
+    const newMon = new Monpoke(name, hp, attack, teamIn.name) 
+    return  Update(teamIn, { monpokes: [...teamIn.monpokes, newMon] })
   }
 
-  get currentMon () {
-    return this.monpokes.find(m => m.name === this.inRing)
+  static isDefeated(team) {
+    return !team.monpokes.some(m => m.hp > 0)
   }
 }
 
@@ -37,33 +40,38 @@ class GameState {
     this.gameOver = false
   }
 
-  get combatStarted () {
-    const inRing = Object.values(this.teams).map(t => t.inRing)
+  static combatStarted (gameStateIn) {
+    const inRing = Object.values(gameStateIn.teams).map(t => t.inRing)
     return inRing.length === 2 && inRing.some(i => i !== undefined)
   }
 
-  get currentTeam () {
-    return Object.values(this.teams).find(t => t.id === this.currentTeamId)
+  static currentTeam(gameStateIn) {
+    return Object.values(gameStateIn.teams).find(t => t.id === gameStateIn.currentTeamId)
   }
 
-  get otherTeam () {
-    return Object.values(this.teams).find(t => t.id !== this.currentTeamId)
+  static otherTeam(gameStateIn) {
+    return Object.values(gameStateIn.teams).find(t => t.id !== gameStateIn.currentTeamId)
   }
-
-  addTeam (name) {
-    if (!(name in this.teams)) {
-      this.teamCount += 1
-      this.teams[name] = new Team(name, this.teamCount)
-      return this.teams[name]
+  static addTeam(name, gameStateIn) {
+    if (!(name in gameStateIn.teams)) {
+      const newTeam = new Team(name, gameStateIn.teamCount + 1)
+      const moreTeam = {}
+      moreTeam[name] = newTeam
+      return Update(gameStateIn, {
+        teams: Update(gameStateIn.teams, moreTeam),
+        teamCount: gameStateIn.teamCount + 1
+      })
+    } else {
+      return gameStateIn
     }
   }
-
-  switchCurrentTeam () {
-    this.currentTeamId = this.currentTeamId === 1 ? 2 : 1
+  static switchCurrentTeam(stateIn) {
+    const newCurrentTeamId = stateIn.currentTeamId === 1 ? 2 : 1
+    return Update(stateIn, { currentTeamId: newCurrentTeamId })
   }
 
-  allMon () {
-    return R.flatten(Object.values(this.teams).map(t => t.monpokes))
+  static allMon (gameStateIn) {
+    return R.flatten(Object.values(gameStateIn.teams).map(t => t.monpokes))
   }
 
 }
@@ -81,37 +89,41 @@ class GameController {
       'ATTACK': function (data) {return self.attackCmd(data)}
     }
     let output =  dispatch[cmdRecord.type](cmdRecord.data)
-    if (this.gameState.currentTeam.isDefeated) output += `\n${this.gameState.otherTeam.name} is the winner!`
+    if (GameState.currentTeam(this.gameState).isDefeated) output += `\n${GameState.otherTeam(this.gameState).name} is the winner!`
     return output
   }
 
   createCmd (data) {
     const [teamName, monName, hp, attack] = data
-    this.gameState.addTeam(teamName)
-    this.gameState.teams[teamName].addMon(monName, hp, attack)
+    this.gameState = GameState.addTeam(teamName, this.gameState)
+    const selectedTeam = this.gameState.teams[teamName]
+    const teamWithNewMon = Team.addMon(monName, hp, attack, selectedTeam)
+    const newTeamObj = {...this.gameState.teams, [teamName]: teamWithNewMon }
+    this.gameState = Update(this.gameState, {teams: newTeamObj})
+
     return `${monName} has been assigned to team ${teamName}!`
   }
 
   chooseCmd (data) {
     const monName = data[0]
     if (this.gameState.teamCount < 2) throw new Error('You may not choose a Mon until another team arrives')
-    const neededMon = this.gameState.allMon().find(m => m.name === monName)
-    if (neededMon.teamName !== this.gameState.currentTeam.name) throw new Error('You may not choose the other team\'s Monpoke')
+    const neededMon = GameState.allMon(this.gameState).find(m => m.name === monName)
+    if (neededMon.teamName !== GameState.currentTeam(this.gameState).name) throw new Error('You may not choose the other team\'s Monpoke')
     if (neededMon.hp <= 0) throw new Error('You may not choose a defeated Mon')
     this.gameState.teams[neededMon.teamName].inRing = monName
-    this.gameState.switchCurrentTeam()
+    this.gameState = GameState.switchCurrentTeam(this.gameState)
     return `${monName} has entered the battle!`
   }
 
   attackCmd () {
-    const attackingMon = this.gameState.currentTeam.currentMon
+    const attackingMon = Team.currentMon(GameState.currentTeam(this.gameState))
     if (attackingMon === undefined) throw new Error('You must choose a Mon before trying to attack')
     if (attackingMon.hp <= 0) throw new Error('You may not attack with a defeated Mon')
-    const defendingMon = this.gameState.otherTeam.currentMon
+    const defendingMon = Team.currentMon(GameState.otherTeam(this.gameState))
     defendingMon.hp -= attackingMon.attack
-    this.gameState.switchCurrentTeam()
-    if (this.gameState.currentTeam.isDefeated) {
-      this.gameState.gameOver = true
+    this.gameState = GameState.switchCurrentTeam(this.gameState)
+    if (Team.isDefeated(GameState.currentTeam(this.gameState))) {
+      this.gameState = {...this.gameState, gameOver: true }
     }
 
     let output = `${attackingMon.name} attacked ${defendingMon.name} for ${attackingMon.attack} damage!`

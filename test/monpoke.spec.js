@@ -1,10 +1,14 @@
 const expect = require('chai').expect
 
+const Update = Object.assign
+
+const _ = require('ramda')
+
 const { GameState, GameController, MonPoke, Team } = require('../src/monpoke.js')
 
 describe('MonPoke', () => {
   describe('attributes', () => {
-    const name = 'Jonny'
+    const name = 'Meekachu'
     const hp = 12
     const attack = 9001
     specify('name', () => {
@@ -51,21 +55,20 @@ describe('Team', () => {
   })
   specify('currentMon', () => {
     const newTeam = new Team()
-    newTeam.addMon('Meekachu', 1, 1)
-    newTeam.inRing = 'Meekachu'
-    expect(newTeam.currentMon).to.have.property('name', 'Meekachu')
-
+    const teamWithOneMon = Team.addMon('Meekachu', 1, 1, newTeam)
+    teamWithOneMon.inRing = 'Meekachu'
+    expect(Team.currentMon(teamWithOneMon)).to.have.property('name', 'Meekachu')
   })
   describe('isDefeated', () => {
     specify('is true only when all Mon have <= 0 hp', () => {
       const team = new Team('Rocket')
-      team.addMon('Meekachu', 2, 2)
-      team.addMon('Snorflax', 2, 2)
-      expect(team.isDefeated).to.equal(false)
+      const teamWithOneMon = Team.addMon('Meekachu', 2, 2, team)
+      const teamWithTwoMon = Team.addMon('Snorflax', 2, 2, teamWithOneMon)
+      expect(Team.isDefeated(teamWithTwoMon)).to.equal(false)
       team.monpokes[0].hp = 0
-      expect(team.isDefeated).to.equal(false)
+      expect(Team.isDefeated(teamWithTwoMon)).to.equal(false)
       team.monpokes[1].hp = 0
-      expect(team.isDefeated).to.equal(true)
+      expect(Team.isDefeated(teamWithTwoMon)).to.equal(true)
     })
   })
   specify('id', () => {
@@ -75,9 +78,9 @@ describe('Team', () => {
   describe('addMon', () => {
     it('adds a mon', () => {
       const team = new Team('Rocket')
-      team.addMon('Spreekachu', 1, 1)
-      expect(team.monpokes[0]).to.have.property('name', 'Spreekachu')
-      expect(team.monpokes[0]).to.have.property('teamName', 'Rocket')
+      const teamWithNewMon = Team.addMon('Spreekachu', 1, 1, team)
+      expect(teamWithNewMon.monpokes[0]).to.have.property('name', 'Spreekachu')
+      expect(teamWithNewMon.monpokes[0]).to.have.property('teamName', 'Rocket')
     })
   })
 })
@@ -102,19 +105,15 @@ describe('GameState', () => {
       expect(gameState).to.have.property('teamCount', 0)
     })
     describe('combatStarted', () => {
-      specify('combatStarted boolean', () => {
-        const newState = new GameState()
-        expect(newState).to.have.property('combatStarted', false)
-      })
       specify('it returns true when both teams have chosen', () => {
         const newState = new GameState()
-        const teamRocket = newState.addTeam('Rocket')
-        teamRocket.inRing = 'Peowth'
-        expect(newState).to.have.property('combatStarted', false)
-        const teamMissile = newState.addTeam('Missile')
-        teamMissile.inRing = 'Missile'
+        const teamRocketState = GameState.addTeam('Rocket', newState)
+        teamRocketState.teams['Rocket'].inRing = 'Peowth'
+        expect(GameState.combatStarted(newState)).to.equal(false)
+        const teamMissileState = GameState.addTeam('Missile', teamRocketState)
+        teamMissileState.teams['Missile'].inRing = 'Missile'
 
-        expect(newState).to.have.property('combatStarted', true)
+        expect(GameState.combatStarted(teamMissileState)).to.equal(true)
       })
     })
     specify('currentTeamId', () => {
@@ -123,30 +122,30 @@ describe('GameState', () => {
     })
     specify('currentTeam', () => {
       const gameState = new GameState()
-      gameState.addTeam('Rocket')
-      expect(gameState.currentTeam).to.have.property('name', 'Rocket')
+      const oneTeamState = GameState.addTeam('Rocket', gameState)
+      expect(GameState.currentTeam(oneTeamState)).to.have.property('name', 'Rocket')
     })
     specify('otherTeam', () => {
       const gameState = new GameState()
-      gameState.addTeam('Rocket')
-      gameState.addTeam('Missile')
-      expect(gameState.otherTeam).to.have.property('name', 'Missile')
+      const teamRocketState = GameState.addTeam('Rocket', gameState)
+      const teamMissileState = GameState.addTeam('Missile', teamRocketState)
+      expect(GameState.otherTeam(teamMissileState)).to.have.property('name', 'Missile')
     })
     specify('gameOver', () => {
       const gameState = new GameState()
       expect(gameState).to.have.property('gameOver', false)
     })
   })
-  context('instance methods', () => {
+  context('type functions', () => {
     describe('addTeam', () => {
       const gameState = new GameState()
       it('creates a new team', () => {
-        gameState.addTeam('Rocket')
+        const newState = GameState.addTeam('Rocket', gameState)
         expect(gameState.teams).to.have.property('Rocket')
         expect(gameState.teams['Rocket']).to.have.property('name', 'Rocket')
       })
       it('gives the team an id', () => {
-        gameState.addTeam('Rocket')
+        const stateWithNewTeam = GameState.addTeam('Rocket', gameState)
         expect(gameState.teams['Rocket']).to.have.property('id', 1)
         expect(gameState.teamCount).to.equal(1)
       })
@@ -154,22 +153,23 @@ describe('GameState', () => {
     describe('switchCurrentTeam', () => {
       it('sets the currentTeam to 1 if it is 2, and 2 if it is 1', () => {
         const gameState = new GameState()
-        gameState.switchCurrentTeam()
-        expect(gameState).to.have.property('currentTeamId', 2)
-        gameState.switchCurrentTeam()
-        expect(gameState).to.have.property('currentTeamId', 1)
+        const switchedOnceState = GameState.switchCurrentTeam(gameState)
+        expect(switchedOnceState).to.have.property('currentTeamId', 2)
+        const twiceSwitchedState = GameState.switchCurrentTeam(gameState)
+        expect(twiceSwitchedState).to.have.property('currentTeamId', 1)
       })
     })
     describe('allMon', () => {
       it('returns all mon from all teams', () => {
         const gameState = new GameState()
-        gameState.addTeam('Rocket')
-        gameState.addTeam('Missile')
-        gameState.teams['Rocket'].addMon('Rocketchu', 1, 1)
-        gameState.teams['Missile'].addMon('Missilchu', 1, 1)
-        expect(gameState.allMon().map(m => m.name)).to.have.members(['Rocketchu', 'Missilchu'])
-      })
+        const rocketAddedState = GameState.addTeam('Rocket', gameState)
+        const missileAddedState = GameState.addTeam('Missile', rocketAddedState)
+        const teamRocketWithRocketChu = Team.addMon('Rocketchu', 1, 1, missileAddedState.teams['Rocket'])
+        const teamMissileWithMissilChu = Team.addMon('Missilchu', 1, 1, missileAddedState.teams['Missile'])
+        const fullTeamRosterState = Update(missileAddedState, { teams: { 'Rocket': teamRocketWithRocketChu, 'Missile': teamMissileWithMissilChu } })
 
+        expect(GameState.allMon(fullTeamRosterState).map(m => m.name)).to.have.members(['Rocketchu', 'Missilchu'])
+      })
     })
   })
 })
@@ -232,18 +232,18 @@ describe('Game Controller', () => {
         const gameController = new GameController()
         gameController.execCmd(createRocketMeekachu)
         gameController.execCmd(createSprocketRecord)
-        expect(gameController.gameState.combatStarted).to.equal(false)
+        expect(GameState.combatStarted(gameController.gameState)).to.equal(false)
         gameController.execCmd(chooseRecord)
         expect(gameController.gameState.teams['Rocket'].inRing).to.equal('Meekachu')
 
-        expect(gameController.gameState.combatStarted).to.equal(true)
+        expect(GameState.combatStarted(gameController.gameState)).to.equal(true)
 
         const chooseBeekachuRecord = {
           type: 'CHOOSE',
           data: ['Beekachu']
         }
         gameController.execCmd(chooseBeekachuRecord)
-        expect(gameController.gameState.combatStarted).to.equal(true)
+        expect(GameState.combatStarted(gameController.gameState)).to.equal(true)
       })
     })
     context('invalid choose', () => {
@@ -262,7 +262,7 @@ describe('Game Controller', () => {
         const gameController = new GameController()
         gameController.execCmd(createRocketMeekachu)
         gameController.execCmd(createSocketFlonyx)
-        const mon = gameController.gameState.currentTeam.monpokes[0]
+        const mon = GameState.currentTeam(gameController.gameState).monpokes[0]
         mon.hp = -1
         expect(() => {
           gameController.execCmd({ type: 'CHOOSE', data: ['Meekachu'] })
@@ -297,7 +297,7 @@ describe('Game Controller', () => {
       expect(state.currentTeamId).to.equal(2)
       gameController.execCmd({ type: 'ATTACK' })
       expect(state.currentTeamId).to.equal(1)
-      const allMon = state.allMon()
+      const allMon = GameState.allMon(state)
       const meekachu = allMon.find(m => m.name === 'Meekachu')
       const socketMon = allMon.find(m => m.name === 'Flonyx')
       expect(meekachu.hp).to.equal(1)
@@ -326,8 +326,9 @@ describe('Game Controller', () => {
       specify('when current mon is defeated', () => {
         const gameController = new GameController()
         gameController.execCmd(createRocketMeekachu)
-        gameController.gameState.currentTeam.inRing = 'Meekachu'
-        gameController.gameState.currentTeam.currentMon.hp = -3
+        const team = GameState.currentTeam(gameController.gameState)
+        const teamWithChosen = Update(team, { inRing : 'Meekachu' })
+        Team.currentMon(team).hp = -3
         expect(() => {
           gameController.execCmd({ type: 'ATTACK' })
 
@@ -377,7 +378,6 @@ describe('Game Controller', () => {
       const cmd = gameController.parse(attack)
       expect(cmd).to.have.property('type', 'ATTACK')
     })
-
   })
 })
 
